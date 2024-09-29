@@ -1,120 +1,140 @@
 import time
-import os
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import rsa, ec
-from cryptography.hazmat.primitives.asymmetric import padding
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Random import get_random_bytes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-def generate_rsa_keypair(bits=2048):
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=bits)
-    public_key = private_key.public_key()
-    return private_key, public_key
+# Generate and compare RSA and ECC keys
 
-def generate_ecc_keypair():
+
+def generate_rsa_key():
+    start = time.time()
+    key = RSA.generate(2048)
+    end = time.time()
+    print(f"RSA Key Generation Time: {end - start:.5f} seconds")
+    return key
+
+
+def generate_ecc_key():
+    start = time.time()
+    key = ec.generate_private_key(ec.SECP256R1())
+    end = time.time()
+    print(f"ECC Key Generation Time: {end - start:.5f} seconds")
+    return key
+
+# Encrypt file with RSA
+
+
+def rsa_encrypt_file(file_path, public_key):
+    with open(file_path, "rb") as f:
+        plaintext = f.read()
+
+    cipher_rsa = PKCS1_OAEP.new(public_key)
+    start = time.time()
+    # RSA (2048-bit) can only encrypt a limited amount of data at once
+    ciphertext = cipher_rsa.encrypt(plaintext[:190])
+    end = time.time()
+    print(f"RSA Encryption Time: {end - start:.5f} seconds")
+
+    return ciphertext
+
+# Decrypt file with RSA
+
+
+def rsa_decrypt_file(ciphertext, private_key):
+    cipher_rsa = PKCS1_OAEP.new(private_key)
+    start = time.time()
+    decrypted_data = cipher_rsa.decrypt(ciphertext)
+    end = time.time()
+    print(f"RSA Decryption Time: {end - start:.5f} seconds")
+
+    return decrypted_data
+
+# Encrypt file with ECC (using AES symmetric encryption for the actual data)
+
+
+def ecc_encrypt_file(file_path, public_key):
+    # Shared key derivation
     private_key = ec.generate_private_key(ec.SECP256R1())
-    public_key = private_key.public_key()
-    return private_key, public_key
+    shared_key = private_key.exchange(ec.ECDH(), public_key)
 
-def encrypt_file_rsa(public_key, file_path, output_path):
-    with open(file_path, 'rb') as f:
-        data = f.read()
-    ciphertext = public_key.encrypt(
-        data,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
-        )
-    )
-    with open(output_path, 'wb') as f:
-        f.write(ciphertext)
+    # Derive symmetric key using HKDF
+    derived_key = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=b'encryption'
+    ).derive(shared_key)
 
-def decrypt_file_rsa(private_key, file_path, output_path):
-    with open(file_path, 'rb') as f:
-        ciphertext = f.read()
-    plaintext = private_key.decrypt(
-        ciphertext,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
-        )
-    )
-    with open(output_path, 'wb') as f:
-        f.write(plaintext)
+    # Encrypt file with AES
+    with open(file_path, "rb") as f:
+        plaintext = f.read()
 
-def encrypt_file_ecc(public_key, file_path, output_path):
-    with open(file_path, 'rb') as f:
-        data = f.read()
-    encryption_key = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-    )[:32]
-    cipher = Cipher(algorithms.AES(encryption_key), modes.ECB())
+    iv = get_random_bytes(16)
+    cipher = Cipher(algorithms.AES(derived_key), modes.CFB(iv))
     encryptor = cipher.encryptor()
-    pad_len = 16 - (len(data) % 16)
-    padded_data = data + bytes([pad_len] * pad_len)
-    ciphertext = encryptor.update(padded_data) + encryptor.finalize()
-    with open(output_path, 'wb') as f:
-        f.write(ciphertext)
 
-def decrypt_file_ecc(private_key, file_path, output_path):
-    with open(file_path, 'rb') as f:
-        ciphertext = f.read()
-    encryption_key = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption()
-    )[:32]
-    cipher = Cipher(algorithms.AES(encryption_key), modes.ECB())
+    start = time.time()
+    ciphertext = iv + encryptor.update(plaintext) + encryptor.finalize()
+    end = time.time()
+    print(f"ECC Encryption Time: {end - start:.5f} seconds")
+
+    return ciphertext, private_key
+
+# Decrypt file with ECC
+
+
+def ecc_decrypt_file(ciphertext, private_key, peer_public_key):
+    # Shared key derivation
+    shared_key = private_key.exchange(ec.ECDH(), peer_public_key)
+
+    # Derive symmetric key using HKDF
+    derived_key = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=b'encryption'
+    ).derive(shared_key)
+
+    # Decrypt file with AES
+    iv = ciphertext[:16]
+    encrypted_data = ciphertext[16:]
+
+    cipher = Cipher(algorithms.AES(derived_key), modes.CFB(iv))
     decryptor = cipher.decryptor()
-    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-    pad_len = plaintext[-1]
-    plaintext = plaintext[:-pad_len]
-    with open(output_path, 'wb') as f:
-        f.write(plaintext)
 
-def measure_performance():
-    start_time = time.time()
-    rsa_private_key, rsa_public_key = generate_rsa_keypair()
-    rsa_keygen_time = time.time() - start_time
+    start = time.time()
+    plaintext = decryptor.update(encrypted_data) + decryptor.finalize()
+    end = time.time()
+    print(f"ECC Decryption Time: {end - start:.5f} seconds")
 
-    start_time = time.time()
-    ecc_private_key, ecc_public_key = generate_ecc_keypair()
-    ecc_keygen_time = time.time() - start_time
+    return plaintext
 
-    file_size = 1024 * 1024
-    test_file_path = 'test_file.txt'
-    encrypted_file_path_rsa = 'encrypted_rsa.bin'
-    decrypted_file_path_rsa = 'decrypted_rsa.txt'
-    encrypted_file_path_ecc = 'encrypted_ecc.bin'
-    decrypted_file_path_ecc = 'decrypted_ecc.txt'
 
-    with open(test_file_path, 'wb') as f:
-        f.write(os.urandom(file_size))
+# Compare performance with a file
+file_path = "sample.txt"
+with open(file_path, "wb") as f:
+    f.write(b"A" * 1024 * 1024)  # Create a 1 MB file
 
-    start_time = time.time()
-    encrypt_file_rsa(rsa_public_key, test_file_path, encrypted_file_path_rsa)
-    rsa_encryption_time = time.time() - start_time
+# RSA Key Generation and Encryption/Decryption
+rsa_key = generate_rsa_key()
+rsa_public_key = rsa_key.publickey()
+rsa_ciphertext = rsa_encrypt_file(file_path, rsa_public_key)
+rsa_decrypted_data = rsa_decrypt_file(rsa_ciphertext, rsa_key)
 
-    start_time = time.time()
-    decrypt_file_rsa(rsa_private_key, encrypted_file_path_rsa, decrypted_file_path_rsa)
-    rsa_decryption_time = time.time() - start_time
+# ECC Key Generation and Encryption/Decryption
+ecc_key = generate_ecc_key()
+ecc_peer_public_key = ecc_key.public_key()
+ecc_ciphertext, sender_private_key = ecc_encrypt_file(
+    file_path, ecc_peer_public_key)
+ecc_decrypted_data = ecc_decrypt_file(
+    ecc_ciphertext, sender_private_key, ecc_peer_public_key)
 
-    start_time = time.time()
-    encrypt_file_ecc(ecc_public_key, test_file_path, encrypted_file_path_ecc)
-    ecc_encryption_time = time.time() - start_time
-
-    start_time = time.time()
-    decrypt_file_ecc(ecc_private_key, encrypted_file_path_ecc, decrypted_file_path_ecc)
-    ecc_decryption_time = time.time() - start_time
-
-    print("RSA Key Generation Time: {:.2f} seconds".format(rsa_keygen_time))
-    print("ECC Key Generation Time: {:.2f} seconds".format(ecc_keygen_time))
-    print("RSA Encryption Time: {:.2f} seconds".format(rsa_encryption_time))
-    print("RSA Decryption Time: {:.2f} seconds".format(rsa_decryption_time))
-    print("ECC Encryption Time: {:.2f} seconds".format(ecc_encryption_time))
-    print("ECC Decryption Time: {:.2f} seconds".format(ecc_decryption_time))
-
-if __name__ == '__main__':
-    measure_performance()
+# Verification
+assert rsa_decrypted_data == b"A" * 190, "RSA Decryption failed!"
+assert ecc_decrypted_data == b"A" * 1024 * 1024, "ECC Decryption failed!"
