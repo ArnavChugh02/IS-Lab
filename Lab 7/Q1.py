@@ -64,3 +64,84 @@ if __name__ == "__main__":
     print(f"Decrypted sum: {dec}")
 
     print(f"Original sum: {num1 + num2}")
+
+
+
+
+
+
+
+
+# import random
+# from sympy import mod_inverse
+
+# # Paillier Key Generation
+# def generate_paillier_keys(bits=512):
+#     p = random_prime(bits)
+#     q = random_prime(bits)
+#     n = p * q
+#     nsquare = n ** 2
+#     g = n + 1  # Common choice for g
+#     lambd = (p - 1) * (q - 1)  # λ(n) = lcm(p-1, q-1)
+#     mu = mod_inverse(lambd, n)  # μ = λ(n)^{-1} mod n
+#     return (n, g), (lambd, mu, n, nsquare)
+
+# # Random prime generator
+# def random_prime(bits):
+#     return random.getrandbits(bits) | 1
+
+# # Paillier Encryption: c = g^m * r^n mod n^2
+# def paillier_encrypt(public_key, message):
+#     n, g = public_key
+#     nsquare = n ** 2
+#     r = random.randint(1, n - 1)  # Random value r
+#     c = (pow(g, message, nsquare) * pow(r, n, nsquare)) % nsquare
+#     return c
+
+# # Paillier Decryption: m = L(c^λ mod n^2) * μ mod n
+# def paillier_decrypt(private_key, ciphertext):
+#     lambd, mu, n, nsquare = private_key
+#     c_lambd = pow(ciphertext, lambd, nsquare)
+#     l = (c_lambd - 1) // n
+#     m = (l * mu) % n
+#     return m
+
+# # Homomorphic addition: c_sum = c1 * c2 mod n^2
+# def homomorphic_add(c1, c2, public_key):
+#     n, g = public_key
+#     nsquare = n ** 2
+#     return (c1 * c2) % nsquare
+
+# # Test Paillier Homomorphic Encryption
+# if __name__ == "__main__":
+#     # Generate Paillier keys
+#     public_key, private_key = generate_paillier_keys(bits=128)
+    
+#     # Original integers to be encrypted
+#     m1 = 7
+#     m2 = 3
+#     print(f"Original integers: {m1}, {m2}")
+    
+#     # Encrypt the integers
+#     c1 = paillier_encrypt(public_key, m1)
+#     c2 = paillier_encrypt(public_key, m2)
+#     print(f"Ciphertext of {m1}: {c1}")
+#     print(f"Ciphertext of {m2}: {c2}")
+    
+#     # Perform addition on the encrypted values
+#     encrypted_sum = homomorphic_add(c1, c2, public_key)
+#     print(f"Encrypted sum: {encrypted_sum}")
+    
+#     # Decrypt the result
+#     decrypted_sum = paillier_decrypt(private_key, encrypted_sum)
+#     print(f"Decrypted sum: {decrypted_sum}")
+    
+#     # Verify the result
+#     expected_sum = m1 + m2
+#     print(f"Expected sum: {expected_sum}")
+    
+#     if decrypted_sum == expected_sum:
+#         print("Decryption is correct, the additive homomorphic property holds.")
+#     else:
+#         print("Something went wrong!")
+
