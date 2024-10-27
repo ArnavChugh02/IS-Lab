@@ -89,3 +89,103 @@ if search_results:
         print(f"Document ID {doc_id}: {doc_text}")
 else:
     print("No documents found.")
+
+
+
+
+
+
+
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Random import get_random_bytes
+from collections import defaultdict
+import hashlib
+
+# --- Sample Documents (Dataset) ---
+documents = {
+    1: "the cat is on the mat",
+    2: "the dog is in the fog",
+    3: "a quick brown fox jumped over the lazy dog",
+    4: "the quick cat jumped over the dog",
+    5: "lorem ipsum dolor sit amet",
+    6: "sit amet lorem ipsum quick",
+    7: "foxes are quick and sly",
+    8: "dogs and cats are friendly",
+    9: "friendly animals are kind",
+    10: "the fox is in the hole"
+}
+
+# --- RSA Key Generation ---
+
+
+def generate_rsa_keys(bits=2048):
+    key = RSA.generate(bits)
+    private_key = key
+    public_key = key.publickey()
+    return public_key, private_key
+
+# --- RSA Encryption ---
+
+
+def rsa_encrypt(public_key, message):
+    cipher = PKCS1_OAEP.new(public_key)
+    ciphertext = cipher.encrypt(message.encode())
+    return ciphertext
+
+# --- RSA Decryption ---
+
+
+def rsa_decrypt(private_key, ciphertext):
+    cipher = PKCS1_OAEP.new(private_key)
+    decrypted_message = cipher.decrypt(ciphertext)
+    return decrypted_message.decode()
+
+# --- Hash Function ---
+
+
+def hash_word(word):
+    return hashlib.sha256(word.encode()).hexdigest()
+
+# --- Create an Inverted Index ---
+
+
+def create_inverted_index(documents):
+    inverted_index = defaultdict(list)
+    for doc_id, text in documents.items():
+        for word in text.split():
+            hashed_word = hash_word(word)  # Hash the words for indexing
+            inverted_index[hashed_word].append(doc_id)
+    return inverted_index
+
+# --- Search Function ---
+
+
+def search(query, inverted_index):
+    hashed_query = hash_word(query)  # Hash the query before searching
+
+    # Search in the inverted index
+    if hashed_query in inverted_index:
+        doc_ids = inverted_index[hashed_query]
+
+        # Display the documents
+        print(f"Search results for '{query}':")
+        for doc_id in doc_ids:
+            print(f"Document {doc_id}: {documents[doc_id]}")
+    else:
+        print(f"No results found for '{query}'.")
+
+
+# --- Main Execution ---
+if __name__ == "__main__":
+    # Step 1: Generate RSA keys (for possible future encryption of documents)
+    public_key, private_key = generate_rsa_keys()
+
+    # Step 2: Create an inverted index from the dataset (with hashed words)
+    inverted_index = create_inverted_index(documents)
+
+    # Step 3: Take a search query from the user
+    query = input("Enter search query: ")
+
+    # Step 4: Perform the search on the hashed inverted index and display results
+    search(query, inverted_index)
